@@ -1,8 +1,12 @@
 import os
 import logging
 import sqlite3
+import asyncio
+from aiohttp import web
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -53,7 +57,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect('engagement.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT chat_id, SUM(message_count) as total_messages, COUNT(*) as users FROM engagement GROUP BY chat_id')
+    cursor.execute(
+        'SELECT chat_id, SUM(message_count) as total_messages, COUNT(*) as users FROM engagement GROUP BY chat_id'
+    )
     rows = cursor.fetchall()
     conn.close()
 
@@ -77,7 +83,9 @@ async def userstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat.id
     conn = sqlite3.connect('engagement.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT user_name, message_count FROM engagement WHERE chat_id=? ORDER BY message_count DESC', (chat_id,))
+    cursor.execute(
+        'SELECT user_name, message_count FROM engagement WHERE chat_id=? ORDER BY message_count DESC', (chat_id,)
+    )
     rows = cursor.fetchall()
     conn.close()
 
@@ -93,22 +101,41 @@ async def userstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Я бот для отслеживания активности. Отправляй сообщения — я буду считать их.")
 
-def main():
-    init_db()
+async def run_bot():
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         logger.error("Не найден токен TELEGRAM_BOT_TOKEN")
         return
 
-    # Создаём приложение без кастомного Request
-    app = ApplicationBuilder().token(token).build()
+    bot_app = ApplicationBuilder().token(token).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("stats", stats))
-    app.add_handler(CommandHandler("userstats", userstats))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    bot_app.add_handler(CommandHandler("start", start))
+    bot_app.add_handler(CommandHandler("stats", stats))
+    bot_app.add_handler(CommandHandler("userstats", userstats))
+    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    app.run_polling()
+    await bot_app.run_polling()
+
+async def run_webserver():
+    async def handle_root(request):
+        return web.Response(text="Bot is running")
+    
+    web_app = web.Application()
+    web_app.router.add_get("/", handle_root)
+    port = int(os.environ.get("PORT", 8000))
+    runner = web.AppRunner(web_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"HTTP сервер запущен на порту {port}")
+    
+    # Держим сервер запущенным
+    while True:
+        await asyncio.sleep(3600)
+
+async def main():
+    init_db()
+    await asyncio.gather(run_bot(), run_webserver())
 
 if __name__ == '__main__':
-    main()
+    asyncio.run(main())
