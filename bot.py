@@ -111,14 +111,25 @@ async def run_bot():
         return
 
     bot_app = ApplicationBuilder().token(token).build()
-
     bot_app.add_handler(CommandHandler("start", start))
     bot_app.add_handler(CommandHandler("stats", stats))
     bot_app.add_handler(CommandHandler("userstats", userstats))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Параметр close_loop=False предотвращает закрытие основного event loop
-    await bot_app.run_polling(close_loop=False)
+    # Явная инициализация и запуск бота
+    await bot_app.initialize()
+    await bot_app.start()
+
+    # Запуск polling в отдельной задаче
+    polling_task = asyncio.create_task(bot_app.updater.start_polling())
+    
+    # Ожидаем, пока бот не завершится (idle)
+    await bot_app.updater.idle()
+
+    # После завершения polling корректно останавливаем бота
+    polling_task.cancel()
+    await bot_app.stop()
+    await bot_app.shutdown()
 
 async def run_webserver():
     async def handle_root(request):
@@ -129,25 +140,4 @@ async def run_webserver():
     port = int(os.environ.get("PORT", 8000))
     runner = web.AppRunner(web_app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
-    logger.info(f"HTTP сервер запущен на порту {port}")
-    
-    while True:
-        await asyncio.sleep(3600)
-
-async def main():
-    init_db()
-    await asyncio.gather(run_bot(), run_webserver())
-
-if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        if "already running" in str(e):
-            # Если цикл уже запущен, используем его
-            loop = asyncio.get_event_loop()
-            loop.create_task(main())
-            loop.run_forever()
-        else:
-            raise
+    site = web.TCPSite(runner, "0.0.0.0",
