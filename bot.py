@@ -3,7 +3,6 @@ import logging
 import sqlite3
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-from telegram.utils.request import Request  # Исправленный импорт
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -101,7 +100,7 @@ def main():
         logger.error("Не найден токен TELEGRAM_BOT_TOKEN")
         return
 
-    req = Request(con_pool_size=8, read_timeout=120, connect_timeout=30)
+    # Создаём приложение без кастомного Request
     app = ApplicationBuilder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
