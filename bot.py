@@ -3,15 +3,14 @@ import logging
 import sqlite3
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.request import Request
 
-# Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Инициализация базы данных
 def init_db():
     conn = sqlite3.connect('engagement.db')
     cursor = conn.cursor()
@@ -27,7 +26,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Обновление статистики по пользователю
 def update_engagement(chat_id, user_id, user_name):
     conn = sqlite3.connect('engagement.db')
     cursor = conn.cursor()
@@ -44,7 +42,6 @@ def update_engagement(chat_id, user_id, user_name):
     conn.commit()
     conn.close()
 
-# Обработчик обычных сообщений
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if message and message.chat and message.chat.type in ["group", "supergroup"]:
@@ -54,7 +51,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_name = user.full_name
         update_engagement(chat_id, user_id, user_name)
 
-# Команда /stats - статистика по всем чатам
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect('engagement.db')
     cursor = conn.cursor()
@@ -78,7 +74,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats_text += f"\nЛучший чат: {top_chat_id} с {top_messages} сообщениями."
     await update.message.reply_text(stats_text)
 
-# Команда /userstats - статистика по пользователям в текущем чате
 async def userstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat.id
     conn = sqlite3.connect('engagement.db')
@@ -96,7 +91,6 @@ async def userstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         stats_text += f"{user_name}: {message_count} сообщений\n"
     await update.message.reply_text(stats_text)
 
-# Команда /start для приветствия
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Привет! Я бот для отслеживания активности. Отправляй сообщения — я буду считать их.")
 
@@ -107,7 +101,9 @@ def main():
         logger.error("Не найден токен TELEGRAM_BOT_TOKEN")
         return
 
-    app = ApplicationBuilder().token(token).build()
+    # Создаем Request с увеличенными таймаутами
+    req = Request(con_pool_size=8, read_timeout=120, connect_timeout=30)
+    app = ApplicationBuilder().token(token).request(req).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
