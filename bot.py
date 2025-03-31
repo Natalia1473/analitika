@@ -102,7 +102,7 @@ def main():
         return
 
     req = Request(con_pool_size=8, read_timeout=120, connect_timeout=30)
-    app = ApplicationBuilder().token(token).request(req).build()
+    app = ApplicationBuilder().token(token).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats))
