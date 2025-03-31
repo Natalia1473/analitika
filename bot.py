@@ -4,9 +4,7 @@ import sqlite3
 import asyncio
 from aiohttp import web
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -36,12 +34,16 @@ def update_engagement(chat_id, user_id, user_name):
     row = cursor.fetchone()
     if row:
         message_count = row[0] + 1
-        cursor.execute('UPDATE engagement SET message_count=? WHERE chat_id=? AND user_id=?',
-                       (message_count, chat_id, user_id))
+        cursor.execute(
+            'UPDATE engagement SET message_count=? WHERE chat_id=? AND user_id=?',
+            (message_count, chat_id, user_id)
+        )
     else:
         message_count = 1
-        cursor.execute('INSERT INTO engagement (chat_id, user_id, user_name, message_count) VALUES (?, ?, ?, ?)',
-                       (chat_id, user_id, user_name, message_count))
+        cursor.execute(
+            'INSERT INTO engagement (chat_id, user_id, user_name, message_count) VALUES (?, ?, ?, ?)',
+            (chat_id, user_id, user_name, message_count)
+        )
     conn.commit()
     conn.close()
 
@@ -84,7 +86,8 @@ async def userstats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conn = sqlite3.connect('engagement.db')
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT user_name, message_count FROM engagement WHERE chat_id=? ORDER BY message_count DESC', (chat_id,)
+        'SELECT user_name, message_count FROM engagement WHERE chat_id=? ORDER BY message_count DESC',
+        (chat_id,)
     )
     rows = cursor.fetchall()
     conn.close()
@@ -114,7 +117,8 @@ async def run_bot():
     bot_app.add_handler(CommandHandler("userstats", userstats))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    await bot_app.run_polling()
+    # Параметр close_loop=False предотвращает закрытие основного event loop
+    await bot_app.run_polling(close_loop=False)
 
 async def run_webserver():
     async def handle_root(request):
@@ -129,7 +133,6 @@ async def run_webserver():
     await site.start()
     logger.info(f"HTTP сервер запущен на порту {port}")
     
-    # Держим сервер запущенным
     while True:
         await asyncio.sleep(3600)
 
@@ -138,4 +141,13 @@ async def main():
     await asyncio.gather(run_bot(), run_webserver())
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        if "already running" in str(e):
+            # Если цикл уже запущен, используем его
+            loop = asyncio.get_event_loop()
+            loop.create_task(main())
+            loop.run_forever()
+        else:
+            raise
