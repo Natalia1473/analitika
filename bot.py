@@ -116,17 +116,17 @@ async def run_bot():
     bot_app.add_handler(CommandHandler("userstats", userstats))
     bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Явная инициализация и запуск бота
+    # Инициализация и запуск бота
     await bot_app.initialize()
     await bot_app.start()
-
-    # Запуск polling в отдельной задаче
-    polling_task = asyncio.create_task(bot_app.updater.start_polling())
+    logger.info("Bot started")
     
-    # Ожидаем, пока бот не завершится (idle)
+    # Запускаем polling в отдельной задаче
+    polling_task = asyncio.create_task(bot_app.updater.start_polling())
+    logger.info("Bot polling started")
+    
+    # Ожидаем завершения работы бота
     await bot_app.updater.idle()
-
-    # После завершения polling корректно останавливаем бота
     polling_task.cancel()
     await bot_app.stop()
     await bot_app.shutdown()
@@ -137,6 +137,7 @@ async def run_webserver():
     
     app_web = web.Application()
     app_web.router.add_get("/", handle_root)
+    # Берем порт из переменной окружения PORT (Render его задает)
     port = int(os.environ.get("PORT", 8000))
     runner = web.AppRunner(app_web)
     await runner.setup()
@@ -146,3 +147,11 @@ async def run_webserver():
     
     while True:
         await asyncio.sleep(3600)
+
+async def main():
+    init_db()
+    # Запускаем бота и веб-сервер параллельно
+    await asyncio.gather(run_bot(), run_webserver())
+
+if __name__ == '__main__':
+    asyncio.run(main())
