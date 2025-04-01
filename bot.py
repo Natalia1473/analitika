@@ -135,9 +135,14 @@ async def run_webserver():
     async def handle_root(request):
         return web.Response(text="Bot is running")
     
-    web_app = web.Application()
-    web_app.router.add_get("/", handle_root)
+    app_web = web.Application()
+    app_web.router.add_get("/", handle_root)
     port = int(os.environ.get("PORT", 8000))
-    runner = web.AppRunner(web_app)
+    runner = web.AppRunner(app_web)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0",
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"HTTP сервер запущен на порту {port}")
+    
+    while True:
+        await asyncio.sleep(3600)
